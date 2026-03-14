@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>气瓶扫码录入</title>
+<style>
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --border:#2e3350;
+  --accent:#4f8ef7; --accent-dim:#1e3a6e;
+  --ok:#2ecc8a; --ok-dim:#0d3d28;
+  --err:#f75c5c; --err-dim:#3d1111;
+  --warn:#f7c948; --warn-dim:#3d2e0a;
+  --text:#e8eaf6; --text2:#8b92b8; --text3:#555d8a;
+  --mono:'Courier New',monospace; --r:12px; --rs:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif}
+body{display:flex;flex-direction:column;max-width:480px;margin:0 auto;min-height:100vh}
+
+header{padding:16px 20px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+.logo{font-size:17px;font-weight:700}.logo span{color:var(--accent)}
+.sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 8px;text-align:center}
+.stat-n{font-size:26px;font-weight:700;line-height:1}
+.stat-l{font-size:10px;color:var(--text3);margin-top:4px}
+.n-ok{color:var(--ok)}.n-err{color:var(--err)}
+
+.sec{padding:14px 16px;border-bottom:1px solid var(--border)}
+
+#vwrap{position:relative;width:100%;border-radius:var(--r);background:#000;overflow:hidden;display:none}
+#video{width:100%;display:block;max-height:260px;object-fit:cover}
+.scanline{position:absolute;left:10%;width:80%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sl 2s ease-in-out infinite;top:50%;pointer-events:none}
+@keyframes sl{0%,100%{opacity:.3;transform:translateY(-28px)}50%{opacity:1;transform:translateY(28px)}}
+.corners{position:absolute;inset:12px;pointer-events:none}
+.corners::before,.corners::after,.corners span::before,.corners span::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--accent);border-style:solid}
+.corners::before{top:0;left:0;border-width:2px 0 0 2px}
+.corners::after{top:0;right:0;border-width:2px 2px 0 0}
+.corners span::before{bottom:0;left:0;border-width:0 0 2px 2px}
+.corners span::after{bottom:0;right:0;border-width:0 2px 2px 0}
+
+#sbar{margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:var(--rs);font-size:13px;color:var(--text2);min-height:42px;display:flex;align-items:flex-start;gap:8px;line-height:1.5;word-break:break-all}
+#sbar.ok{background:var(--ok-dim);color:var(--ok)}
+#sbar.err{background:var(--err-dim);color:var(--err)}
+#sbar.loading{background:var(--warn-dim);color:var(--warn)}
+.sdot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;margin-top:5px}
+
+.brow{display:flex;gap:10px;margin-top:12px}
+.btn{flex:1;padding:13px 10px;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--surface);color:var(--text);font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{opacity:.75;transform:scale(.97)}
+.btn-scan{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.btn-stop{background:var(--err-dim);border-color:var(--err);color:var(--err);display:none}
+
+.manual{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.manual input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);font-size:14px;padding:11px 14px;outline:none;font-family:var(--mono);letter-spacing:1px}
+.manual input:focus{border-color:var(--accent)}
+.manual input::placeholder{font-family:-apple-system,'PingFang SC',sans-serif;letter-spacing:0;color:var(--text3)}
+.manual .btn{flex:0 0 60px;font-size:13px;padding:11px 8px}
+
+.rhead{padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between}
+.rtitle{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:.8px;text-transform:uppercase}
+.bsm{padding:6px 12px;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text2);cursor:pointer}
+.bsm.ex{border-color:var(--ok);color:var(--ok);background:var(--ok-dim)}
+
+#log{flex:1;overflow-y:auto;padding:0 16px 80px}
+.empty{text-align:center;padding:40px 20px;color:var(--text3)}
+.ei{font-size:40px;margin-bottom:12px;opacity:.5}
+
+.item{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);animation:si .2s ease}
+@keyframes si{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.item:last-child{border-bottom:none}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dok{background:var(--ok)}.derr{background:var(--err)}.dload{background:var(--warn);animation:pu 1s infinite}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.3}}
+.ibody{flex:1;min-width:0}
+.isn{font-size:15px;font-weight:600;font-family:var(--mono);color:var(--text)}
+.isn.na{color:var(--text3);font-weight:400;font-size:13px;font-family:inherit}
+.ibc{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.itime{font-size:10px;color:var(--text3);flex-shrink:0}
+
+.bbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:10px 16px;background:var(--bg);border-top:1px solid var(--border);display:flex;gap:8px}
+.btn-ex{background:var(--ok-dim);border-color:var(--ok);color:var(--ok)}
+.btn-cl{color:var(--text3)}
+
+
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">气瓶<span>扫码</span>录入</div>
+  <div class="sub">扫描条形码 · 自动匹配气瓶编号</div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="n-total">0</div><div class="stat-l">已扫描</div></div>
+  <div class="stat"><div class="stat-n n-ok" id="n-ok">0</div><div class="stat-l">成功</div></div>
+  <div class="stat"><div class="stat-n n-err" id="n-err">0</div><div class="stat-l">失败</div></div>
+</div>
+
+<div class="sec">
+  <div id="vwrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="scanline"></div>
+    <div class="corners"><span></span></div>
+  </div>
+  <div id="sbar"><div class="sdot"></div><span id="stxt">点击下方按钮启动摄像头</span></div>
+  <div class="brow">
+    <button class="btn btn-scan" id="b-start">📷 开始扫码</button>
+    <button class="btn btn-stop" id="b-stop">⏹ 停止</button>
+  </div>
+</div>
+
+<div class="manual">
+  <input type="text" id="m-input" placeholder="手动输入条码号" maxlength="30" inputmode="numeric"/>
+  <button class="btn" id="b-manual">查询</button>
+</div>
+
+<div class="rhead">
+  <span class="rtitle">扫描记录</span>
+  <div style="display:flex;gap:6px">
+    <button class="bsm" id="b-clear2">清空</button>
+    <button class="bsm ex" id="b-ex2">导出 CSV</button>
+  </div>
+</div>
+
+<div id="log">
+  <div class="empty" id="empty"><div class="ei">📋</div>暂无记录，扫描后自动显示</div>
+</div>
+
+<div class="bbar">
+  <button class="btn btn-cl" id="b-clear" style="flex:1">清空</button>
+  <button class="btn btn-ex" id="b-ex" style="flex:2">⬇ 导出 CSV</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script>
+// ─── 超时 fetch（兼容所有手机浏览器）─────────────────────────
+function fetchWithTimeout(url, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('请求超时(' + ms/1000 + 's)')), ms);
+    fetch(url)
+      .then(r => { clearTimeout(timer); resolve(r); })
+      .catch(e => { clearTimeout(timer); reject(e); });
+  });
+}
+
+// ─── API 请求（直连，服务器已确认支持跨域）──────────────────
+const TARGET = bc =>
+  `https://cylinder.lnyagp.com/api/bizProductArchives/getlist?qrcodeNumber=${encodeURIComponent(bc)}&delFlag=0&orderBy=create_time%20desc`;
+
+async function apiQuery(bc) {
+  try {
+    const res = await fetchWithTimeout(TARGET(bc), 12000);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const rows =
+      data.items ||
+      data.rows ||
+      (Array.isArray(data.data) ? data.data : null) ||
+      (data.data && data.data.rows) ||
+      data.list ||
+      (Array.isArray(data) ? data : null) ||
+      [];
+    return { ok: true, rows };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ─── UI 逻辑 ───────────────────────────────────────────────────
+const records = [], seen = new Set();
+let lastCode = '', lastTs = 0, quaggaRunning = false;
+const $ = id => document.getElementById(id);
+
+function setSt(msg, cls = '') {
+  const b = $('sbar'); b.className = cls; b.id = 'sbar';
+  $('stxt').textContent = msg;
+}
+function updateStats() {
+  $('n-total').textContent = records.length;
+  $('n-ok').textContent = records.filter(r => r.s === 'ok').length;
+  $('n-err').textContent = records.filter(r => r.s === 'err').length;
+}
+function renderLog() {
+  $('empty').style.display = records.length ? 'none' : '';
+  document.querySelectorAll('.item').forEach(e => e.remove());
+  const html = records.slice().reverse().map(r => {
+    const dc = r.s === 'ok' ? 'dok' : r.s === 'err' ? 'derr' : 'dload';
+    const sn = r.sn || (r.s === 'loading' ? '查询中…' : '查询失败');
+    const nc = r.sn ? '' : ' na';
+    return `<div class="item">
+      <div class="dot ${dc}"></div>
+      <div class="ibody">
+        <div class="isn${nc}">${sn}</div>
+        <div class="ibc">条码: ${r.bc}</div>
+      </div>
+      <div class="itime">${r.t}</div>
+    </div>`;
+  }).join('');
+  $('log').insertAdjacentHTML('afterbegin', html);
+}
+
+async function processBarcode(bc) {
+  bc = bc.trim().replace(/\s/g, '');
+  if (!bc) return;
+  if (seen.has(bc)) { setSt('⚠ 已录入: ' + bc, 'loading'); return; }
+  seen.add(bc);
+  const now = new Date();
+  const t = now.getHours().toString().padStart(2, '0') + ':' +
+            now.getMinutes().toString().padStart(2, '0') + ':' +
+            now.getSeconds().toString().padStart(2, '0');
+  const rec = { bc, sn: '', s: 'loading', t };
+  records.push(rec);
+  updateStats(); renderLog();
+  setSt('查询中: ' + bc, 'loading');
+
+  const result = await apiQuery(bc);
+  if (result.ok) {
+    const rows = result.rows;
+    if (rows && rows.length > 0) {
+      const sn = rows[0].serialNumber || rows[0].serial_number || '';
+      if (sn) {
+        rec.sn = sn; rec.s = 'ok';
+        setSt('✓ 气瓶编号: ' + sn, 'ok');
+      } else {
+        rec.s = 'err';
+        setSt('✗ 返回数据中无 serialNumber 字段', 'err');
+      }
+    } else {
+      rec.s = 'err';
+      setSt('✗ 未找到记录，条码可能未入库: ' + bc, 'err');
+    }
+  } else {
+    rec.s = 'err';
+    // 给用户友好提示
+    setSt('✗ 网络请求失败。请确认手机已联网，或尝试手动输入条码。\n错误: ' + result.error, 'err');
+  }
+  updateStats(); renderLog();
+}
+
+// ─── 扫码 ──────────────────────────────────────────────────────
+$('b-start').addEventListener('click', () => {
+  $('vwrap').style.display = 'block';
+  $('b-start').style.display = 'none';
+  $('b-stop').style.display = '';
+  setSt('正在启动摄像头…', 'loading');
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+  }).then(stream => {
+    const video = $('video');
+    video.srcObject = stream;
+    video.play();
+
+    Quagga.init({
+      inputStream: {
+        type: 'LiveStream',
+        target: video,
+        constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      },
+      decoder: { readers: ['code_128_reader'] },
+      locate: true
+    }, err => {
+      if (err) { setSt('Quagga 初始化失败: ' + (err.message || err), 'err'); return; }
+      Quagga.start();
+      quaggaRunning = true;
+      setSt('对准条形码（一维码）扫描');
+    });
+
+    Quagga.onDetected(r => {
+      const code = r.codeResult.code, now = Date.now();
+      // 只接受 Code 128 格式，忽略 EAN/UPC/二维码等
+      if (r.codeResult.format !== 'code_128') return;
+      if (code === lastCode && now - lastTs < 3000) return;
+      lastCode = code; lastTs = now;
+      if (navigator.vibrate) navigator.vibrate(60);
+      processBarcode(code);
+    });
+
+  }).catch(e => {
+    $('vwrap').style.display = 'none';
+    $('b-start').style.display = '';
+    $('b-stop').style.display = 'none';
+    setSt('摄像头启动失败: ' + e.message + '\n（需要 HTTPS 环境，或检查摄像头权限）', 'err');
+  });
+});
+
+$('b-stop').addEventListener('click', () => {
+  if (quaggaRunning) { Quagga.stop(); quaggaRunning = false; }
+  const v = $('video');
+  if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; }
+  $('vwrap').style.display = 'none';
+  $('b-start').style.display = '';
+  $('b-stop').style.display = 'none';
+  setSt('已停止扫码');
+});
+
+// ─── 手动输入 ──────────────────────────────────────────────────
+$('b-manual').addEventListener('click', () => {
+  const v = $('m-input').value;
+  if (v) { processBarcode(v); $('m-input').value = ''; }
+});
+$('m-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('b-manual').click(); });
+
+// ─── 导出 ─────────────────────────────────────────────────────
+function doExport() {
+  if (!records.length) { setSt('没有记录可导出', 'err'); return; }
+  const csv = '\uFEFF条码号,气瓶编号(serialNumber),状态,时间\n' +
+    records.map(r => `${r.bc},${r.sn},${r.s === 'ok' ? '成功' : '失败'},${r.t}`).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = '气瓶对照表_' + new Date().toLocaleDateString('zh-CN').replace(/\//g, '-') + '.csv';
+  a.click();
+  setSt('已导出 ' + records.length + ' 条记录', 'ok');
+}
+['b-ex', 'b-ex2'].forEach(id => $(id).addEventListener('click', doExport));
+
+// ─── 清空 ─────────────────────────────────────────────────────
+function doClear() {
+  if (!records.length || confirm('确认清空全部记录？')) {
+    records.length = 0; seen.clear(); updateStats(); renderLog(); setSt('已清空');
+  }
+}
+['b-clear', 'b-clear2'].forEach(id => $(id).addEventListener('click', doClear));
+</script>
+</body>
+</html>
